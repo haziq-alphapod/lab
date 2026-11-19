@@ -1,0 +1,24 @@
+# LAB "custom": Ubuntu 22.04 + nginx.org 1.30.6 (VULNERABLE) + hand-built headers-more module (--with-compat).
+FROM ubuntu:22.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d && chmod +x /usr/sbin/policy-rc.d
+RUN apt-get update && apt-get install -y sudo vim-tiny less procps curl gnupg2 ca-certificates lsb-release ubuntu-keyring \
+    build-essential git wget libpcre3-dev zlib1g-dev libssl-dev
+RUN curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor > /usr/share/keyrings/nginx-archive-keyring.gpg \
+ && echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/ubuntu jammy nginx" > /etc/apt/sources.list.d/nginx.list \
+ && printf 'Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n' > /etc/apt/preferences.d/99nginx \
+ && apt-get update && apt-get install -y nginx=1.30.6-1~jammy
+# the module is built once for 1.30.6, same as the prod hosts today
+RUN mkdir -p /usr/local/src/nginx-build && cd /usr/local/src/nginx-build \
+ && git clone --depth 1 https://github.com/openresty/headers-more-nginx-module.git \
+ && wget -q https://nginx.org/download/nginx-1.30.6.tar.gz && tar xzf nginx-1.30.6.tar.gz \
+ && cd nginx-1.30.6 && ./configure --with-compat --add-dynamic-module=../headers-more-nginx-module >/dev/null && make modules >/dev/null \
+ && install -m 644 objs/ngx_http_headers_more_filter_module.so /usr/lib/nginx/modules/ \
+ && cd .. && rm -rf nginx-1.30.6 nginx-1.30.6.tar.gz
+RUN mkdir -p /etc/nginx/modules-enabled \
+ && ln -sfn /usr/lib/nginx/modules /etc/nginx/modules \
+ && echo 'load_module /etc/nginx/modules/ngx_http_headers_more_filter_module.so;' > /etc/nginx/modules-enabled/50-mod-http-headers-more-filter.conf \
+ && sed -i '1i include /etc/nginx/modules-enabled/*.conf;' /etc/nginx/nginx.conf
+COPY site/default.conf /etc/nginx/conf.d/default.conf
+WORKDIR /root
+CMD ["sleep","infinity"]

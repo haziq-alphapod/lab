@@ -1,0 +1,6 @@
+# usage: docker compose up -d --build ; docker compose exec native bash   (also: custom, php)
+# Runs on your own CPU type (arm64 on Apple silicon). No fake x86 emulation: it breaks service restarts.
+services:
+  native: { build: { context: ., dockerfile: Dockerfile.native }, hostname: lab-native }
+  custom: { build: { context: ., dockerfile: Dockerfile.custom }, hostname: lab-custom }
+  php:    { build: { context: ., dockerfile: Dockerfile.php    }, hostname: lab-php }
